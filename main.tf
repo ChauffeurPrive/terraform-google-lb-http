@@ -95,17 +95,12 @@ resource "google_compute_backend_service" "default" {
   project     = var.project
   count       = length(var.backend_params)
   name        = "${var.name}-backend-${count.index}"
-  port_name   = element(split(",", element(var.backend_params, count.index)), 1)
+  port_name   = lookup(var.backend_params[count.index], "service_name", "http")
   protocol    = var.backend_protocol
-  timeout_sec = element(split(",", element(var.backend_params, count.index)), 3)
+  timeout_sec = lookup(var.backend_params[count.index], "timeout", "86400")
   dynamic "backend" {
     for_each = [var.backends[count.index]]
     content {
-      # TF-UPGRADE-TODO: The automatic upgrade tool can't predict
-      # which keys might be set in maps assigned here, so it has
-      # produced a comprehensive set here. Consider simplifying
-      # this after confirming which keys can be set in practice.
-
       balancing_mode               = lookup(backend.value, "balancing_mode", null)
       capacity_scaler              = lookup(backend.value, "capacity_scaler", null)
       description                  = lookup(backend.value, "description", null)
@@ -117,10 +112,7 @@ resource "google_compute_backend_service" "default" {
       max_utilization              = lookup(backend.value, "max_utilization", null)
     }
   }
-  health_checks = [element(
-    google_compute_http_health_check.default.*.self_link,
-    count.index,
-  )]
+  health_checks = [google_compute_http_health_check.default[count.index].self_link]
   security_policy = var.security_policy
   enable_cdn      = var.cdn
 }
@@ -129,40 +121,22 @@ resource "google_compute_http_health_check" "default" {
   project      = var.project
   count        = length(var.backend_params)
   name         = "${var.name}-backend-${count.index}"
-  request_path = element(split(",", element(var.backend_params, count.index)), 0)
-  port         = element(split(",", element(var.backend_params, count.index)), 2)
+  request_path = lookup(var.backend_params[count.index], "healthcheck_path", "/")
+  port         = lookup(var.backend_params[count.index], "service_port", 80)
 }
 
 # Create firewall rule for each backend in each network specified, uses mod behavior of element().
 resource "google_compute_firewall" "default-hc" {
-  count         = length(var.firewall_networks) * length(var.backend_params)
-  project       = element(var.firewall_projects, count.index) == "default" ? var.project : element(var.firewall_projects, count.index)
+  count         = length(var.firewall_networks)
+  project       = var.firewall_projects[count.index] == "default" ? var.project : var.firewall_projects[count.index]
   name          = "${var.name}-hc-${count.index}"
-  network       = element(var.firewall_networks, count.index)
+  network       = var.firewall_networks[count.index]
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16", "209.85.152.0/22", "209.85.204.0/22"]
   target_tags   = var.target_tags
 
   allow {
     protocol = "tcp"
-    ports = [element(
-      split(
-        ",",
-        element(
-          split(
-            "|",
-            join(
-              "",
-              [
-                join("|", var.backend_params),
-                replace(format("%*s", length(var.backend_params), ""), " ", "|"),
-              ],
-            ),
-          ),
-          count.index,
-        ),
-      ),
-      2,
-    )]
+    ports    = [for x in var.backend_params: x.service_port]
   }
 }
 
