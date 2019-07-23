@@ -98,16 +98,19 @@ resource "google_compute_backend_service" "default" {
   port_name   = lookup(var.backend_params[count.index], "service_name", "http")
   protocol    = var.backend_protocol
   timeout_sec = lookup(var.backend_params[count.index], "timeout", "86400")
-  backend {
-    balancing_mode               = lookup(var.backends[count.index], "balancing_mode", null)
-    capacity_scaler              = lookup(var.backends[count.index], "capacity_scaler", null)
-    description                  = lookup(var.backends[count.index], "description", null)
-    group                        = lookup(var.backends[count.index], "group", null)
-    max_connections              = lookup(var.backends[count.index], "max_connections", null)
-    max_connections_per_instance = lookup(var.backends[count.index], "max_connections_per_instance", null)
-    max_rate                     = lookup(var.backends[count.index], "max_rate", null)
-    max_rate_per_instance        = lookup(var.backends[count.index], "max_rate_per_instance", null)
-    max_utilization              = lookup(var.backends[count.index], "max_utilization", null)
+  dynamic "backend" {
+    for_each = var.backends[count.index]
+    content {
+      balancing_mode               = lookup(backend.value, "balancing_mode", null)
+      capacity_scaler              = lookup(backend.value, "capacity_scaler", null)
+      description                  = lookup(backend.value, "description", null)
+      group                        = lookup(backend.value, "group", null)
+      max_connections              = lookup(backend.value, "max_connections", null)
+      max_connections_per_instance = lookup(backend.value, "max_connections_per_instance", null)
+      max_rate                     = lookup(backend.value, "max_rate", null)
+      max_rate_per_instance        = lookup(backend.value, "max_rate_per_instance", null)
+      max_utilization              = lookup(backend.value, "max_utilization", null)
+    }
   }
   health_checks = [google_compute_http_health_check.default[count.index].self_link]
   security_policy = var.security_policy
