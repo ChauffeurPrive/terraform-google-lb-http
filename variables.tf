@@ -50,14 +50,8 @@ variable "target_tags" {
   type        = list(string)
 }
 
-variable "backends" {
-  description = "Map backend indices to list of backend maps."
-  type        = map(any)
-}
-
-variable "backend_params" {
-  description = "List of backend parameters in a map with keys: healthcheck_path, service_name, service_port, timeout"
-  type        = list(any)
+variable "backend_services" {
+  description = "Map of backend services to create"
 }
 
 variable "backend_protocol" {
@@ -115,4 +109,3 @@ variable "cdn" {
   description = "Set to `true` to enable cdn on backend."
   default     = "false"
 }
-

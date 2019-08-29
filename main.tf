@@ -92,14 +92,19 @@ resource "google_compute_url_map" "default" {
 }
 
 resource "google_compute_backend_service" "default" {
-  project     = var.project
-  count       = length(var.backend_params)
-  name        = "${var.name}-backend-${count.index}"
-  port_name   = lookup(var.backend_params[count.index], "service_name", "http")
-  protocol    = var.backend_protocol
-  timeout_sec = lookup(var.backend_params[count.index], "timeout", "86400")
+  for_each        = var.backend_services
+
+  project         = var.project
+  name            = "${var.name}-backend-${each.key}"
+  port_name       = lookup(each.value, "service_name", "http")
+  protocol        = var.backend_protocol
+  timeout_sec     = lookup(each.value, "timeout", "86400")
+  health_checks   = [google_compute_http_health_check.default[each.key].self_link]
+  security_policy = lookup(each.value, "security_policy", var.security_policy)
+  enable_cdn      = var.cdn
+
   dynamic "backend" {
-    for_each = var.backends[count.index]
+    for_each = each.value.backends
     content {
       balancing_mode               = lookup(backend.value, "balancing_mode", null)
       capacity_scaler              = lookup(backend.value, "capacity_scaler", null)
@@ -112,17 +117,17 @@ resource "google_compute_backend_service" "default" {
       max_utilization              = lookup(backend.value, "max_utilization", null)
     }
   }
-  health_checks = [google_compute_http_health_check.default[count.index].self_link]
-  security_policy = var.security_policy
-  enable_cdn      = var.cdn
 }
 
 resource "google_compute_http_health_check" "default" {
-  project      = var.project
-  count        = length(var.backend_params)
-  name         = "${var.name}-backend-${count.index}"
-  request_path = lookup(var.backend_params[count.index], "healthcheck_path", "/")
-  port         = lookup(var.backend_params[count.index], "service_port", 80)
+  for_each            = var.backend_services
+
+  project             = var.project
+  name                = "${var.name}-backend-${each.key}"
+  request_path        = lookup(each.value, "healthcheck_path", "/")
+  port                = lookup(each.value, "service_port", 80)
+  timeout_sec         = lookup(each.value, "timeout_sec", 5)
+  check_interval_sec  = lookup(each.value, "check_interval_sec", 5)
 }
 
 # Create firewall rule for each backend in each network specified, uses mod behavior of element().
@@ -136,7 +141,6 @@ resource "google_compute_firewall" "default-hc" {
 
   allow {
     protocol = "tcp"
-    ports    = [for x in var.backend_params: x.service_port]
+    ports    = [for x in var.backend_services: x.service_port]
   }
 }
-
