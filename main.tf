@@ -132,7 +132,7 @@ resource "google_compute_http_health_check" "default" {
 
 # Create firewall rule for each backend in each network specified, uses mod behavior of element().
 resource "google_compute_firewall" "default-hc" {
-  for_each      = var.firewall_networks
+  for_each      = toset(var.firewall_networks)
 
   project       = each.value == "default" ? var.project : each.value
   name          = "${var.name}-hc-${each.value}"
